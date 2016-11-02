@@ -17,7 +17,19 @@ namespace DnsHelperUI
         /// <summary>
         /// The currently selected Network interface card
         /// </summary>
-        public string CurrentNic { get { return btnSelectedNic.Text; } set { btnSelectedNic.Text = value; } }
+        private string _currentNic;
+        public string CurrentNic
+        {
+            get { return _currentNic; }
+            set
+            {
+                _currentNic = value;
+                // Update the DNS values to the currently applied ones
+                var dnsServers = RefreshDNSValues();
+                SetDnsTextBoxValues(dnsServers != null && dnsServers.Length > 0 ? dnsServers[0] : string.Empty,
+                                    dnsServers != null && dnsServers.Length > 1 ? dnsServers[1] : string.Empty);
+            }
+        }
 
         public MainForm()
         {
@@ -34,14 +46,13 @@ namespace DnsHelperUI
             // Load the DNS server config from the file
             ReloadContextMenuItems();
 
-            // Discover the current nic, just naively select the first one 
-            // (this will not work on systems with multiple enabled NIC's)
-            CurrentNic = NetworkManagement.GetAllNicDescriptions().FirstOrDefault();
+            // Get all the nics and load them into a drop down, 
+            // if we have any NICs, fill dropdown and 
+            // select the first one from the list as current.
+            var nics = NetworkManagement.GetAllNicDescriptions();
 
-            // Update the DNS values to the currently applied ones
-            var dnsServers = RefreshDNSValues();
-            SetDnsTextBoxValues(dnsServers != null && dnsServers.Length > 0 ? dnsServers[0] : string.Empty,
-                                dnsServers != null && dnsServers.Length > 1 ? dnsServers[1] : string.Empty);
+            cmbNics.Items.AddRange(nics.Length > 0 ? nics : new string[] { "No Available NiCs" });
+            cmbNics.SelectedIndex = 0;
         }
 
         private string[] RefreshDNSValues()
@@ -62,13 +73,13 @@ namespace DnsHelperUI
             RefreshDNSValues();
         }
 
-        private void UpdateCurrentDNSLabelValues( string[] dnsServers)
+        private void UpdateCurrentDNSLabelValues(string[] dnsServers)
         {
             // First reset them
             lblDns01Current.Text = lblDns02Current.Text = "(Auto)";
             if (dnsServers != null)
             {
-                if(dnsServers.Length > 0 && !dnsServers[0].EndsWith("1.1"))
+                if (dnsServers.Length > 0 && !dnsServers[0].EndsWith("1.1"))
                     lblDns01Current.Text = dnsServers[0];
                 if (dnsServers.Length > 1 && !dnsServers[1].EndsWith("1.1"))
                     lblDns02Current.Text = dnsServers[1];
@@ -77,7 +88,7 @@ namespace DnsHelperUI
 
         private void btnClearDns_Click(object sender, EventArgs e)
         {
-            UpdateCurrentDNSLabelValues(new[] { "(Waiting)", "(Waiting)"});
+            UpdateCurrentDNSLabelValues(new[] { "(Waiting)", "(Waiting)" });
             NetworkManagement.SetNameservers(CurrentNic, null, restart: true);
             tbDns01.Text = tbDns02.Text = "";
             RefreshDNSValues();
@@ -100,7 +111,7 @@ namespace DnsHelperUI
             }
 
             UpdateCurrentDNSLabelValues(new[] { "(Waiting)", "(Waiting)" });
-            NetworkManagement.SetNameservers(CurrentNic, new []{dns01, dns02}, restart: true);
+            NetworkManagement.SetNameservers(CurrentNic, new[] { dns01, dns02 }, restart: true);
             RefreshDNSValues();
         }
 
@@ -114,7 +125,7 @@ namespace DnsHelperUI
             return IPAddress.TryParse(value, out address) && address.AddressFamily == AddressFamily.InterNetwork;
         }
 
-        private void btnSelectedNic_Click(object sender, EventArgs e)
+        private void btnOpenConnectionList_Click(object sender, EventArgs e)
         {
             // Open the network connections window
             Process.Start("ncpa.cpl");
@@ -153,7 +164,7 @@ namespace DnsHelperUI
 
                 // Remove stuff from the context menu
                 ctxMenuChooseDns.Items.Clear();
-                
+
                 foreach (var entry in json)
                 {
                     ctxMenuChooseDns.Items.Add(CreateSubMenu(entry));
@@ -175,7 +186,7 @@ namespace DnsHelperUI
             var sub = new ToolStripMenuItem(entry.Title);
             foreach (var server in entry.Servers)
             {
-                var item = new ToolStripMenuItem(server.Title){ Tag = new Tuple<string, DnsServers>(""/*entry.IpUpdateUrl*/, server) };
+                var item = new ToolStripMenuItem(server.Title) { Tag = new Tuple<string, DnsServers>(""/*entry.IpUpdateUrl*/, server) };
                 item.Click += (sender, args) =>
                 {
                     var data = ((ToolStripMenuItem)sender)?.Tag as Tuple<string, DnsServers>;
@@ -191,7 +202,7 @@ namespace DnsHelperUI
             }
 
             if (!string.IsNullOrWhiteSpace(entry.Website) && Uri.IsWellFormedUriString(entry.Website, UriKind.Absolute))
-            { 
+            {
                 // Add separator
                 sub.DropDownItems.Add(new ToolStripSeparator());
 
@@ -225,6 +236,9 @@ namespace DnsHelperUI
             }
         }
 
-        
+        private void cmbNics_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            CurrentNic = cmbNics.Text;
+        }
     }
 }
